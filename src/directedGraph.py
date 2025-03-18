@@ -77,6 +77,8 @@ Methods:
         # add class attributes to graph
         self.edge_count = 0 # number of edges in the graph
         self.node_count = 0 # number of nodes in the graph
+        # load graph attributes 
+        self.graph.update(attr)
 
 
 
