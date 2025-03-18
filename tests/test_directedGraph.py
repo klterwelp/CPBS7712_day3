@@ -2,8 +2,11 @@
 import unittest
 import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from directedGraph import diGraph
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+try:
+    from directedGraph import diGraph
+except ModuleNotFoundError:
+    raise ModuleNotFoundError("Ensure 'directedGraph.py' exists in the '../src' directory relative to this test file.")
 
 class TestDiGraph(unittest.TestCase):
     """
