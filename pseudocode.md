@@ -8,6 +8,9 @@ The following is the pseudocode and planning stage of my algorithms. I also incl
 
 - [fastapy](https://github.com/aziele/fastapy/blob/main/fastapy.py)
 
+### Graphs
+- [NetworkX](https://networkx.org/documentation/)
+
 ### De Bruijn Graphs
 
 - [py-debruijn](https://github.com/mitbal/py-debruijn)
@@ -41,7 +44,7 @@ Find or create a new node
 Compact linear stretches of graph
 
 ```python
-def import_fasta(path):
+def import_fasta_sequences(path):
     """ Import fasta and return a named tuple list of sequences """ 
 
     # read fasta file by line
@@ -69,3 +72,63 @@ def import_fasta(path):
                 log error: fasta file format issue 
 
 ```
+
+```python
+def get_kmer_list(sequence, k): 
+    """ Takes a sequence and generates a list of k-mers """
+    i = 0 
+    seq_length = num of sequence char
+    kmers = list()
+    while i is less than seq_length - k + 1: 
+        kmer = sequence[i:i+k-1]
+        append kmer to kmers
+        i += 1
+    return kmers
+```
+
+### De Bruijn Graph Class
+Inspired by NetworkX directed graph 
+
+- `node_dict_factory`
+	- key = node ids
+	- value = node attributes
+	- `self._node` (`__init__`)
+- `node_attr_dict_factory`
+	- key = attribute name
+	- value = attribute values 
+- `adjlist_outer_dict_factory`
+	- key = node ids
+	- value = adjacency info 
+	- `self._adj` (`__init__`)
+	- `self._pred` (`__init__`)
+		- `self._succ` is equal to `_pred`
+- `adjlist_inner_dict_factory`
+	- key = neighbor
+	- value = edge data
+- `edge_attr_dict_factory`
+	- key = attribute name
+	- value = attribute values
+- `graph_attr_dict_factory`
+	- key = attribute name
+	- value = attribute values 
+	- `self.graph` (`__init__`)
+
+Add node
+```python
+def add_node(self, node_for_adding, **attr):
+    if node_for_adding not in self._node:
+
+
+
+
+```
+
+Add nodes
+
+Remove node
+
+Remove nodes
+
+Add edge
+
+Add edges
