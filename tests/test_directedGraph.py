@@ -40,6 +40,19 @@ class TestDiGraph(unittest.TestCase):
     - `test_get_edge_attributes`: Tests retrieving attributes for a specific edge.
     - `test_set_edge_attributes`: Ensures attributes for a specific edge can be set and updated.
     - `test_clear_graph`: Verifies that the graph can be cleared of all nodes, edges, and attributes.
+    - `test_add_duplicate_node`: Ensures adding a duplicate node updates attributes without overwriting existing ones.
+    - `test_add_duplicate_edge`: Ensures adding a duplicate edge updates attributes without overwriting existing ones.
+    - `test_remove_nonexistent_edge`: Ensures an exception is raised when attempting to remove a non-existent edge.
+    - `test_successors_nonexistent_node`: Ensures an exception is raised when querying successors of a non-existent node.
+    - `test_predecessors_nonexistent_node`: Ensures an exception is raised when querying predecessors of a non-existent node.
+    - `test_in_degree_nonexistent_node`: Ensures an exception is raised when querying the in-degree of a non-existent node.
+    - `test_out_degree_nonexistent_node`: Ensures an exception is raised when querying the out-degree of a non-existent node.
+    - `test_get_node_attributes_nonexistent_node`: Ensures an exception is raised when querying attributes of a non-existent node.
+    - `test_set_node_attributes_nonexistent_node`: Ensures an exception is raised when setting attributes for a non-existent node.
+    - `test_get_edge_attributes_nonexistent_edge`: Ensures an exception is raised when querying attributes of a non-existent edge.
+    - `test_set_edge_attributes_nonexistent_edge`: Ensures an exception is raised when setting attributes for a non-existent edge.
+    - `test_clear_graph_with_attributes`: Verifies that clearing the graph removes all nodes, edges, and attributes, including graph-level attributes.
+    - `test_add_edge_with_nonexistent_nodes`: Ensures edges can be added even if the nodes do not exist, and verifies their creation.
     Each test case uses assertions to validate the expected behavior of the diGraph class.
     """
 
