@@ -104,6 +104,16 @@ Methods:
           self.node_count += 1
       else:  # update attr even if node already exists
           self._node[node_for_adding].update(attr)
+
+# function to check node exists in graph 
+    def has_node(self, n):
+        """Return True if the graph contains the node n, False otherwise.
+        Parameters
+        ----------
+        n : node
+            A node in the graph.
+        """
+        return n in self._succ
       
 # function to remove node from graph
     def remove_node(self, n):
@@ -426,3 +436,22 @@ Methods:
         self.edge_count = 0
         self.node_count = 0
 
+# function to get summary of graph 
+    def __str__(self):
+        """Return a string representation of the graph."""
+        return f"Directed Graph with {self.number_of_nodes()} nodes and {self.number_of_edges()} edges."
+
+# function to visualize graph 
+    def visualize_graph(self, png_path="graph.png"):
+        """Visualize the directed graph using Graphviz."""
+        try:
+            import graphviz as gv
+        except ImportError as e:
+            raise ImportError("Graph visualization requires the 'graphviz' package.") from e
+        dot = gv.Digraph()
+        for u, v in self.get_edges():
+            dot.edge(str(u), str(v))
+            
+        dot.render(png_path)
+        return dot
+        
