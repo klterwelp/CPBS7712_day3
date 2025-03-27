@@ -57,6 +57,8 @@ class TestDiGraph(unittest.TestCase):
     - `test_set_edge_attributes_nonexistent_edge`: Ensures an exception is raised when setting attributes for a non-existent edge.
     - `test_clear_graph_with_attributes`: Verifies that clearing the graph removes all nodes, edges, and attributes, including graph-level attributes.
     - `test_add_edge_with_nonexistent_nodes`: Ensures edges can be added even if the nodes do not exist, and verifies their creation.
+    - `test_str`: Checks the string representation of the graph
+    - `test_visualize_graph`: Ensures the graph visualization function produces the expected output (png and pdf files)
     Each test case uses assertions to validate the expected behavior of the diGraph class.
     """
 
