@@ -88,7 +88,8 @@ class deBruijnGraph(diGraph):
                 'query_merged': 0,
                 'tip': False,
                 'isolated': False,
-                'low_coverage': False
+                'low_coverage': False, 
+                'query_kmer': False
             }
             # Set the node attributes
             self.set_node_attributes(seq, **node_attributes)
@@ -637,6 +638,7 @@ class deBruijnGraph(diGraph):
                     # set mer to visited if not already visited
                     if not mer_attr.get("visited", False):
                         mer_attr["visited"] = True
+                        mer_attr["query_kmer"] = True
                         # update in graph
                         self.set_node_attributes(mer, **mer_attr)
             else:
@@ -645,7 +647,213 @@ class deBruijnGraph(diGraph):
                     f"Edge {left_mer}->{right_mer} does not exist in the graph. "
                     "Query sequence may not be fully represented."
                 )
+    # compact graph except for query kmers 
+    def compact_except_query(self):
+        # check if graph is already compacted, raise errors if it is 
+        if self.graph["compacted"]:
+            raise ValueError("Graph is already compacted. Only compact once.")
+        
+        # check if nodes have in-degree and out-degree attributes
+        if 'in_degree' not in self.get_node_attributes(next(self.get_nodes())):
+            self.add_degrees_attributes() # add in-degree and out-degree attributes
+        
+        # check that query boundaries were established in the graph 
+        if not self.graph.get("query"):
+            raise ValueError("Query sequence not found in graph attributes. Please import fasta into graph with identify_query_boundaries.")
+        
+        # get k for graph
+        k = self.graph['k']
+        
+        # iteration counter
+        i = 0
+        
+        while True:
+            # update set of compactable nodes
+                # do not compact: query_kmers or already compacted nodes
+            compactable_nodes = list(self.get_nodes(compacted=False, out_degree=1, query_kmer=False))
+            print(f"Compactable nodes for {i} are {compactable_nodes}")
+            
+            # if set of compactable nodes is empty, break
+            if not compactable_nodes:
+                break
+           
+            # get first node of compactable set 
+            node = compactable_nodes.pop(0)
+            i += 1 # update iteration counter
+            # track whether node visited for left-most node search
+            left_walk_visited=set()
+            # add node to left_walk_visited
+            left_walk_visited.add(node)
+            # determine in degree of node and out degree of predecessor
+            node_in_degree = self.get_node_attributes(node)['in_degree']
+           
+            if (node_in_degree == 1):
+                pred = list(self.predecessors(node))[0]# get first predecessor
+                pred_attr = self.get_node_attributes(pred)
+                pred_out_degree = pred_attr['out_degree']
+                pred_query = pred_attr['query_kmer']
+                pred_visited = pred in left_walk_visited
+            else:
+                # no predecessor
+                pred = 0
+                pred_out_degree = 0
+                pred_visited = False
+                pred_query = False
+        
+            # walk to left-most compactable node from initial set node
+            while (node_in_degree == 1) and (pred_out_degree == 1) and (not pred_visited) and (not pred_query):
+                # update node to predecessor, generate new variables with new node
+                node = pred
+                left_walk_visited.add(node) # add node to visited
+                # determine in degree of node and out degree of predecessor
+                node_in_degree = self.get_node_attributes(node)['in_degree']
+                if (node_in_degree > 0):
+                    pred = list(self.predecessors(node))[0] # get first predecessor
+                    pred_attr = self.get_node_attributes(pred) # get pred attributes
+                    pred_out_degree = pred_attr['out_degree']
+                    pred_query = pred_attr['query_kmer']
+                    pred_visited = pred in left_walk_visited
+                else:
+                    # no predecessor
+                    pred = 0
+                    pred_out_degree == 0
+                    pred_visited = False
+                    pred_query = False 
+        
+            # start compacting from left-most node
+            print(f"starting to compact with {node}")
+            node_attr = self.get_node_attributes(node)
+            node_out_degree = (self.out_degree(node) == 1)
+            node_compacted = node_attr['compacted']
+            node_query = node_attr['query_kmer']
+        
+            # double-check node is compactable
+            assert (self.out_degree(node) == 1) and (not node_compacted) and (not node_query), "Error, we hit a non-compactable node."
+
+            first_sequence = True
+            # set node attributes to ensure we don't re-compact it
+            self.set_node_attributes(node,
+                compacted=True,
+                sum=0,
+                dist=0
+                )
+        
+             # while loop for compaction
+            while True:
+                # test the following break conditions:
+                    # test the following break conditions:
+                successors = list(self.successors(node))
+                if not successors:
+                    print(f"No successors found for node: {node}")
+                    break
                 
+                # 1) node must have one out_degree
+                if (self.out_degree(node) != 1):
+                    # more than one successor, no more compaction!
+                    print(f"finished compaction with node {node}")
+                    break
+                # 2) successor must have one in_degree
+                succ = successors[0]
+                succ_attr = self.get_node_attributes(succ)
+                if (self.in_degree(succ) != 1):
+                    print(f"finished compaction with node {node}")
+                    break
+                # 3) successor cannot be the node (self-reference loop)
+                if succ == node:
+                    print(f"hit a self-reference with node {node}")
+                    break
+                # 4) successor cannot already be visited
+                if succ_attr['visited']:
+                    print(f"hit a loop: {succ} already visited")
+                    break
+                # 5) successor cannot be query node
+                if succ_attr['query_kmer']:
+                    print(f"hit a query kmer: {succ}")
+                    break
+                # 6) node cannot be a successor or successor's successor
+                if node in self.successors(node) or node in self.successors(succ):
+                    print(f"hit a loop: {node} is a successor or a successor's successor")
+                    break 
+                # set node to visited 
+                self.set_node_attributes(node, visited=True)
+                # get update node_attributes
+                node_attr=self.get_node_attributes(node)
+                node_in_degree=node_attr["in_degree"]
+                # only keep the full k-mer sequence for first node in a path
+                if node_in_degree > 0 and first_sequence:
+                    node_sequence = self.get_node_attributes(node)['sequence']
+                    trimmed_sequence = node_sequence[k-2:] # trim sequence
+                    self.set_node_attributes(node, sequence = trimmed_sequence) # update node sequence
+                    first_sequence = False
+                else:
+                    first_sequence = False  # keeps in_degree 0 node sequence
+            
+                # add all edges succ.successors to node
+                for succ_succ in self.successors(succ):
+                    self.add_edge(node, succ_succ)
+                    # copy original edge coverage to new edge
+                    old_coverage=self.get_edge_attributes(succ, succ_succ)['coverage']                    
+                    self.set_edge_attributes(node, succ_succ, coverage=old_coverage)
+
+                # add successor sequence to node sequence
+                node_attr = self.get_node_attributes(node) 
+            
+                if succ_attr['compacted']:
+                    # add succ sequence to node
+                    node_sequence = node_attr['sequence']
+                    succ_sequence = succ_attr['sequence']
+                    node_sequence += succ_sequence
+                    # add succ distance to node distance
+                    node_dist = node_attr['dist']
+                    succ_dist = succ_attr['dist']
+                    node_dist += succ_dist
+                    # add succ sum to node sum
+                    node_sum = node_attr['sum']
+                    succ_sum = succ_attr['sum']
+                    node_sum += succ_sum
+                    # update node attributes
+                    self.set_node_attributes(node, sequence=node_sequence, 
+                                        dist=node_dist,
+                                        sum=node_sum
+                                        )
+                else: 
+                    # successor not already compacted, only add last character
+                    node_attr["sequence"] += succ_attr["sequence"][-1:]
+                    # add edge coverage as the sum (which is the sum of all edges' coverage compacted)
+                    node_attr["sum"] += self.get_edge_attributes(node, succ)["coverage"]
+                    # moved one further (node->succ)
+                    node_attr["dist"] += 1
+
+                # now delete successor and edge between node->succ
+                self.remove_edge(node, succ)
+                self.remove_node(succ)
+                # update node in_degrees, succ_succs should remain the same because edges preserved
+                new_out_degree = self.out_degree(node)
+                new_in_degree = self.in_degree(node)
+                self.set_node_attributes(node, out_degree=new_out_degree, in_degree=new_in_degree)
+                
+                print(f"{node}: out_degrees equal to {self.out_degree(node)} and set to {new_out_degree}")
+        
+        # Update coverage of nodes based on sum/dist 
+        # Update all nodes except query as not visited for assembly purposes
+        reset_list=list(self.get_nodes(query_kmer=False, visited=True))
+        for node in reset_list:
+            self.set_node_attributes(node, visited=False)
+            
+        # Update compacted nodes with coverage info
+        compacted_list=list(self.get_nodes(compacted=True))
+        for node in compacted_list:
+            node_attr=self.get_node_attributes(node)
+            if (node_attr["dist"] == 0):
+                # not actually compacted, just marked
+                node_attr["coverage"]=1
+                node_attr["compacted"]=False
+                self.set_node_attributes(node, **node_attr)
+            else:
+                # actually compacted, calc coverage
+                node_attr["coverage"]=(node_attr["sum"]/node_attr["dist"])
+                self.set_node_attributes(node, **node_attr)         
+               
     # identify next node to select 
     def get_next_node(self, node, dir):
         """
@@ -726,7 +934,9 @@ class deBruijnGraph(diGraph):
                     unvisited_neighbors,
                     key=lambda n: (
                         -self.get_node_attributes(n)[degree_key],
+                        -self.get_node_attributes(n)["coverage"],
                         -edge_func(node, n)["coverage"],
+                        -self.get_node_attributes(n)["dist"],
                         n  # Alphabetical order
                         )
                     )[0]
@@ -751,7 +961,9 @@ class deBruijnGraph(diGraph):
                         neighbors_with_unvisited_neighbors,
                         key=lambda n: (
                             -self.get_node_attributes(n)[degree_key],
+                            -self.get_node_attributes(n)["coverage"],
                             -edge_func(node, n)["coverage"],
+                            -self.get_node_attributes(n)["dist"],
                             n  # Alphabetical order
                             )
                         )[0]
@@ -785,22 +997,30 @@ class deBruijnGraph(diGraph):
             # update node
             node = next_node
             # get node sequence 
-            full_sequence = self.get_node_attributes(node)["sequence"]
+            node_attr = self.get_node_attributes(node)
+            full_sequence = node_attr["sequence"]
+            dist = node_attr["dist"]
             # set node attribute to visited
             self.set_node_attributes(node, visited=True)
-            # get node sequence 
-            full_sequence = self.get_node_attributes(node)["sequence"]
-            # trim sequence based on dir
-            if (dir == 0): 
-                # get first character of full_sequence
-                node_sequence = full_sequence[0]
-                # append characters to the beginning of sequence to construct full sequence
-                sequence = node_sequence + sequence
-            if (dir == 1): 
-                # trim sequence to the last character for successor direction
-                node_sequence = full_sequence[-1]
-                # Append characters from each node's sequence to construct the full sequence
-                sequence += node_sequence
+            # add sequence based on dir and compaction
+            if node_attr["compacted"]:
+                # add full sequence since it is already trimmed in compaction
+                if (dir == 0):
+                    sequence = full_sequence + sequence
+                if (dir == 1):
+                    sequence += full_sequence
+            else: 
+                # node not compacted, need trimming 
+                if (dir == 0): 
+                    # get first character of sequence for predeccessor direction
+                    node_sequence = full_sequence[0]
+                    # append characters to the beginning of sequence to construct full sequence
+                    sequence = node_sequence + sequence
+                if (dir == 1): 
+                    # trim sequence to the last character for successor direction
+                    node_sequence = full_sequence[-1]
+                    # Append characters from each node's sequence to construct the full sequence
+                    sequence += node_sequence
         
         # return sequence 
         return sequence
@@ -817,7 +1037,22 @@ class deBruijnGraph(diGraph):
         query_end = self.graph['query_end']
         
         # run walk in left direction, starting from query_start
-        left_contig = self.walk(query_start, 0)    
+        # prior to starting walk, get the node next to query_start
+        next_to_query_start = self.get_next_node(query_start, 0)
+        # set next node back to unvisited
+        self.set_node_attributes(next_to_query_start, visited=False)
+        # assemble left contig
+        left_contig = self.walk(query_start, 0)   
+        # left contig will be trimmed if next node from query_start is compacted
+        if next_to_query_start: 
+            # if node exists next to query start
+            if self.get_node_attributes(next_to_query_start)["compacted"]:
+                # left contig must be trimmed to remove start of query sequence node (k-1 length) from contig end
+                contig_len = len(left_contig)
+                print(f"contig left length: {contig_len}")
+                k = self.graph['k']
+                left_contig = left_contig[0:(contig_len-(k-2))]
+            
         # run walk in right direction, starting from query_end
         right_contig = self.walk(query_end, 1)
         
@@ -826,41 +1061,5 @@ class deBruijnGraph(diGraph):
         assembled_sequence += self.graph.get("query")
         assembled_sequence += right_contig
         
-        return full_sequence
-                   
-        
-        
-        
-            
-            
-        
-    
-    
-                    
-                
-                    
-                    
-                
-                
-        
-                        
-            
-  
+        return assembled_sequence
 
-            
-            
-                
-            
-
-
-
-# remove tips from de bruijn graph
-
-# remove isolated nodes from de bruijn graph
-
-# remove low coverage k-mers from de bruijn graph
-
-# remove low coverage edges from de bruijn graph
-# bubble removal from de bruijn graph
-
-# eulerian path from de bruijn graph
