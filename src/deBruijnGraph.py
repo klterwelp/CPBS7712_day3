@@ -85,10 +85,6 @@ class deBruijnGraph(diGraph):
                 'dist': 0,
                 'query_subgraph': False,
                 'query_distance': None,
-                'query_merged': 0,
-                'tip': False,
-                'isolated': False,
-                'low_coverage': False, 
                 'query_kmer': False
             }
             # Set the node attributes
@@ -978,6 +974,30 @@ class deBruijnGraph(diGraph):
                     return None
 
     def walk(self, start_node, dir): 
+        """
+        Walks through the graph starting from the given node and constructs a sequence based on the direction.
+
+        Parameters: 
+        - start_node: The node from which to start the walk. Must be marked as visited.
+        - dir: The direction of the walk. 0 for predecessor direction, 1 for successor direction.
+
+        Returns:
+        - sequence: The constructed sequence from the walk.
+
+        Raises:
+        - ValueError: If the start_node is not marked as visited.
+
+        The method performs the following steps:
+            1. Initiates an empty sequence string.
+            2. Checks if the start_node is visited; raises an error if not.
+            3. Sets the current node to start_node.
+            4. Iteratively gets the next node in the specified direction until no more nodes are found.
+            5. Updates the current node and retrieves its attributes.
+            6. Marks the node as visited.
+            7. Adds the node's sequence to the constructed sequence based on the direction and whether the node is compacted.
+            8. Returns the final constructed sequence.
+        """
+
         # initiate sequence string
         sequence = ""    
         # check that start_node is visited, raise error if not
@@ -1026,6 +1046,24 @@ class deBruijnGraph(diGraph):
         return sequence
     
     def assemble_from_query(self):
+        """
+        Assembles a sequence from the query sequence in the graph by walking in both directions from the query boundaries.
+        Returns:
+            - assembled_sequence: The final assembled sequence.
+
+        Raises:
+            - ValueError: If the query sequence is not found in the graph attributes.
+
+        The method performs the following steps:
+            1. Initiates an empty assembled sequence string.
+            2. Checks if the query sequence is available in the graph attributes; raises an error if not.
+            3. Retrieves the start and end nodes of the query sequence.
+            4. Walks in the left direction starting from the query start node to assemble the left contig.
+            5. If the node next to the query start is compacted, trims the left contig to remove the start of the query sequence node.
+            6. Walks in the right direction starting from the query end node to assemble the right contig.
+            7. Combines the left contig, query sequence, and right contig into the final assembled sequence.
+            8. Returns the final assembled sequence.
+        """
         # intiate empty assembled sequence
         assembled_sequence = ""
         # check that query is available in graph attr
