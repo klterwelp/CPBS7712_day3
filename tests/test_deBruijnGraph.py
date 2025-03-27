@@ -487,7 +487,7 @@ class TestDeBruijnGraph(unittest.TestCase):
         for kmer in kmers:
             dbg.add_kmer(kmer)
 
-        # Create a small FASTA file for testing
+        # Import a small FASTA file for testing
         test_fasta = os.path.abspath(os.path.join(os.path.dirname(__file__), '../data/test_query_boundaries.fa'))
 
         # Attempt to identify query boundaries
@@ -795,11 +795,115 @@ class TestDeBruijnGraph(unittest.TestCase):
         next_node = dbg.get_next_node("TGAT", dir=1)
         self.assertEqual(next_node, "GATC")  # Higher out-degree branch is preferred over higher coverage
 
-    def test_assemble_from_query(self):
+    def test_compact_except_query(self):
         k = 5
         dbg = deBruijnGraph(k)
+        # Add k-mers to the graph
+        kmers = ["ATGAT", "TGATT", "TGATC", "GATTA", "ATTAA", "AATGA", "CAATG", "GCAAT", "TCAAT", "GGCAA", "GTCAA"]
+        for kmer in kmers:
+            dbg.add_kmer(kmer)            
+        
+        # visualize graph
+        dbg.visualize_graph("test_compact.png")
+        
+        # Import a small FASTA query file for testing
+        test_fasta = os.path.abspath(os.path.join(os.path.dirname(__file__), '../data/test_compact.fa'))
+        dbg.identify_query_boundaries(test_fasta)
+        
+        # Test query end and start
+        self.assertEqual(dbg.graph['query_start'], "ATGA")
+        self.assertEqual(dbg.graph['query_end'], "TGAT")
+        
+        # Add degrees
+        dbg.add_degrees_attributes()
+        
+        # Test compaction
+        dbg.compact_except_query()
+        
+        # visualize graph
+        dbg.visualize_graph("test_compacted.png")
+        
+        # Assert correct compacted sequences
+        compact1=dbg.get_node_attributes("GATT")
+        compact2=dbg.get_node_attributes("ATCA")
+        compact3=dbg.get_node_attributes("CAAT")
+        compact4=dbg.get_node_attributes("GGCA")
+        compact5=dbg.get_node_attributes("GTCA")
+        compact6=dbg.get_node_attributes("TTGC")
+        compact7=dbg.get_node_attributes("TTGA")
+        norm2=dbg.get_node_attributes("GATC")
+        self.assertEqual(compact1["sequence"], "TAATC")
+        self.assertEqual(compact2["sequence"], "ATTG")
+        self.assertEqual(compact3["sequence"], "TG")
+        self.assertEqual(compact4["sequence"], "GGCAA")
+        self.assertEqual(compact5["sequence"], "GTCAA")
+        self.assertEqual(compact6["sequence"], "CC")
+        self.assertEqual(compact7["sequence"], "AC")
+        self.assertTrue(compact1["compacted"])
+        self.assertFalse(norm2["compacted"])
+        
+    def test_compact_walk(self):
+        k = 5
+        dbg = deBruijnGraph(k)
+        # Add k-mers to the graph
+        kmers = ["ATGAT", "TGATT", "TGATC", "GATTA", "ATTAA", "AATGA", "CAATG", "GCAAT", "TCAAT", "GGCAA", "GTCAA"]
+        for kmer in kmers:
+            dbg.add_kmer(kmer)            
+        
+        # visualize graph
+        dbg.visualize_graph("test_compact.png")
+        
+        # Import a small FASTA query file for testing
+        test_fasta = os.path.abspath(os.path.join(os.path.dirname(__file__), '../data/test_compact.fa'))
+        dbg.identify_query_boundaries(test_fasta)
+        
+        # Test query end and start
+        self.assertEqual(dbg.graph['query_start'], "ATGA")
+        self.assertEqual(dbg.graph['query_end'], "TGAT")
+        
+        # Add degrees
+        dbg.add_degrees_attributes()
+                
+        # Compact
+        dbg.compact_except_query() 
+        
+        # Assemble
+        assembly = dbg.assemble_from_query()
+        self.assertEqual(assembly, "GGCAATGATTAATCATTGAC")
+        # there's a couple of branches but it'll choose the one with the lowest alphabet option
+    
+    def test_not_compact_walk(self):
+        # if this graph isn't compacted first, get a smaller output contig
+        k = 5
+        dbg = deBruijnGraph(k)
+        # Add k-mers to the graph
+        kmers = ["ATGAT", "TGATT", "TGATC", "GATTA", "ATTAA", "AATGA", "CAATG", "GCAAT", "TCAAT", "GGCAA", "GTCAA"]
+        for kmer in kmers:
+            dbg.add_kmer(kmer)            
+        
+        # visualize graph
+        dbg.visualize_graph("test_compact.png")
+        
+        # Import a small FASTA query file for testing
+        test_fasta = os.path.abspath(os.path.join(os.path.dirname(__file__), '../data/test_compact.fa'))
+        dbg.identify_query_boundaries(test_fasta)
+        
+        # Test query end and start
+        self.assertEqual(dbg.graph['query_start'], "ATGA")
+        self.assertEqual(dbg.graph['query_end'], "TGAT")
+        
+        # Add degrees
+        dbg.add_degrees_attributes()
+        
+        # Assembly
+        assembly = dbg.assemble_from_query()
+        
+        # Will miss the bridge option from "GATT"
+        self.assertEqual(assembly, "GGCAATGATCATTGAC")
+
         
         
+
         
 if __name__ == '__main__':
     unittest.main()
