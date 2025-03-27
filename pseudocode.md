@@ -15,6 +15,8 @@ The following is the pseudocode and planning stage of my algorithms. I also incl
 - [How to apply de Bruijn graphs](https://www.nature.com/articles/nbt.2023)
 - [Python bcalm](https://github.com/rchikhi/python-bcalm)
 - [miniDBG](https://github.com/mdondrup/miniDBG)
+- [rustDBG](https://10xgenomics.github.io/rust-debruijn/master/debruijn/index.html)
+- [GubbleGun](https://github.com/fawaz-dabbaghieh/bubble_gun/tree/master/BubbleGun)
 
 ### Targeted Assembly
 
