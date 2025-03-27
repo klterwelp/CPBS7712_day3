@@ -77,7 +77,7 @@ with open(contig_path, "w") as fasta_file:
 
 ```
 
-In the future, I will write this as a simple function someone can call from the src folder. At the moment, I still have some testing to do.
+In the future, I will write this as a simple function someone can call from the src folder. This is a simple example of how I would pull the class functions together.
 
 ## Classes
 
