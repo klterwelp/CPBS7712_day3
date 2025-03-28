@@ -100,7 +100,7 @@ class deBruijnGraph(diGraph):
             
             
 # add de bruijn edge
-    def add_nodes_with_edge(self, seq1, seq2):
+    def add_nodes_with_edge(self, seq1, seq2, coverage=1):
         """
         Adds nodes and an edge between them in the de Bruijn graph.
         This method ensures that the graph is not compacted before adding nodes or edges.
@@ -108,10 +108,11 @@ class deBruijnGraph(diGraph):
         then adds an edge between them. If the edge already exists, its coverage attribute
         is incremented. If the edge does not exist, it is created with an initial coverage
         of 1. If the edge cannot be verified after creation, it is removed, and an error
-        is raised.
+        is raised. Can optionally change coverage if using a k-mer count dict. 
         Args:
             seq1 (str): The sequence representing the first node.
             seq2 (str): The sequence representing the second node.
+            coverage (int): The number of times an edge was seen. (default is 1)
         Raises:
             ValueError: If the graph is compacted and edges cannot be added.
             ValueError: If the edge cannot be verified after being added.
@@ -133,13 +134,14 @@ class deBruijnGraph(diGraph):
         # check if edge already exists
         if self.has_successor(seq1, seq2):
             # increment edge coverage
+            # only adds one because it assumes that a k-mer dict uses k-mers as keys
             old_coverage = self.get_edge_attributes(seq1, seq2)['coverage']
             new_coverage = old_coverage + 1
             self.set_edge_attributes(seq1, seq2, coverage=new_coverage)
         else:
             # add new edge
             self.add_edge(seq1, seq2)
-            self.set_edge_attributes(seq1, seq2, coverage=1, query_edge=False, query_edge_location=[])
+            self.set_edge_attributes(seq1, seq2, coverage=coverage, query_edge=False, query_edge_location=[])
             
             # check that new edge was added
             try: 
@@ -150,14 +152,17 @@ class deBruijnGraph(diGraph):
             
 
 # add k-mer to de bruijn graph
-    def add_kmer(self, kmer):
+    def add_kmer(self, kmer, coverage=1):
         """
         Adds a k-mer and its reverse complement to the de Bruijn graph.
         This method takes a k-mer, validates its length against the graph's k value,
         and splits it into left and right (k-1)-mers. It then adds the nodes and 
-        edges corresponding to the k-mer and its reverse complement to the graph.
+        edges corresponding to the k-mer and its reverse complement to the graph. If
+        adding k-mers from a k-mer count dict, can add the count as coverage to ensure
+        coverage passes over.
         Args:
             kmer (str): The k-mer to be added to the graph.
+            coverage (int): The amount of coverage for the k-mer edge. (default 1)
         Raises:
             AssertionError: If the length of the k-mer does not match the graph's k value.
             ValueError: If there is an issue adding nodes or edges to the graph.
@@ -172,7 +177,7 @@ class deBruijnGraph(diGraph):
         
         # add nodes and edge
         try: 
-            self.add_nodes_with_edge(left_mer, right_mer)
+            self.add_nodes_with_edge(left_mer, right_mer, coverage)
         except ValueError as e:
             print(e)
         
@@ -181,7 +186,7 @@ class deBruijnGraph(diGraph):
         rc_left_mer = rc_kmer[:-1]
         rc_right_mer = rc_kmer[1:]
         try: 
-            self.add_nodes_with_edge(rc_left_mer, rc_right_mer)
+            self.add_nodes_with_edge(rc_left_mer, rc_right_mer, coverage)
         except ValueError as e:
             print(e)
         
@@ -198,7 +203,8 @@ class deBruijnGraph(diGraph):
         The method skips lines starting with '>' (FASTA headers) and processes the 
         remaining lines as sequences. It counts k-mer occurrences and adds only those 
         k-mers that meet the `min_count` threshold. This is an initial filter to prevent 
-        erronous k-mers from being added to the graph.
+        erronous k-mers from being added to the graph. Then, adds the count as coverage
+        for the k-mer edge. 
         """
 
         k = self.graph['k']
@@ -221,7 +227,7 @@ class deBruijnGraph(diGraph):
         # Second pass: Add k-mers that meet the min_count threshold
         for kmer, count in kmer_counts.items():
             if count >= min_count:
-                self.add_kmer(kmer)
+                self.add_kmer(kmer, coverage=count)
 
 # import query fasta file as search queue 
     def query_kmers_from_fasta(self, fasta_path):

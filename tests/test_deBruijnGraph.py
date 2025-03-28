@@ -269,6 +269,10 @@ class TestDeBruijnGraph(unittest.TestCase):
 
             # Check reverse complement k-mer nodes and edges
             self.assertTrue(dbg.has_successor(rc_kmer[:-1], rc_kmer[1:]))
+            
+        # Check edge coverage transferred via count
+        coverage=dbg.get_edge_attributes("GCTA","CTAT")["coverage"]
+        self.assertEqual(coverage, 2)
 
     def test_add_kmers_from_fasta_invalid_file(self):
         k = 5
