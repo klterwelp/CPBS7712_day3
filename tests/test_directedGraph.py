@@ -2,6 +2,7 @@
 import unittest
 import sys
 import os
+import shutil
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 try:
     from directedGraph import diGraph
@@ -56,6 +57,8 @@ class TestDiGraph(unittest.TestCase):
     - `test_set_edge_attributes_nonexistent_edge`: Ensures an exception is raised when setting attributes for a non-existent edge.
     - `test_clear_graph_with_attributes`: Verifies that clearing the graph removes all nodes, edges, and attributes, including graph-level attributes.
     - `test_add_edge_with_nonexistent_nodes`: Ensures edges can be added even if the nodes do not exist, and verifies their creation.
+    - `test_str`: Checks the string representation of the graph
+    - `test_visualize_graph`: Ensures the graph visualization function produces the expected output (png and pdf files)
     Each test case uses assertions to validate the expected behavior of the diGraph class.
     """
 
@@ -78,6 +81,11 @@ class TestDiGraph(unittest.TestCase):
         self.graph.add_node(1, color='red')
         self.assertEqual(self.graph._node[1]['color'], 'red')
         self.assertEqual(self.graph._node[1]['size'], 10)  # Ensure size remains unchanged
+    
+    def test_has_node(self):
+        self.graph.add_node(1)
+        self.assertTrue(self.graph.has_node(1))
+        self.assertFalse(self.graph.has_node(2))
         
     def test_remove_node(self):
         self.graph.add_node(1)
@@ -208,6 +216,16 @@ class TestDiGraph(unittest.TestCase):
             list(self.graph.get_nodes(color='blue', size=10)),
             []
         )
+        # Test retrieving nodes with include_data=True and filtering by a single attribute
+        self.assertListEqual(
+            list(self.graph.get_nodes(include_data=True, color='blue')),
+                [(1, {'color': 'blue'})])
+            
+            # Test retrieving nodes with include_data=True and filtering by multiple attributes
+        self.assertListEqual(
+            list(self.graph.get_nodes(include_data=True, color='blue', size=10)),
+                []
+            )
 
     def test_get_edges(self):
         self.graph.add_edge(1, 2, weight=4, color='red')
@@ -268,6 +286,29 @@ class TestDiGraph(unittest.TestCase):
         self.assertEqual(self.graph._node[1]['color'], 'blue')
         self.assertEqual(self.graph._node[1]['size'], 10)
 
+    def test_set_multiple_node_attributes(self):
+        self.graph.add_node(1, color='blue')
+        self.graph.set_node_attributes(1, color='red', size=10)
+        self.assertEqual(self.graph._node[1]['color'], 'red')
+        self.assertEqual(self.graph._node[1]['size'], 10)
+    
+    def test_set_multiple_node_attributes_from_variable(self):
+        node_attributes = {
+            'color': 'green',
+            'size': 20,
+            'shape': 'circle',
+            'label': 'Node1',
+            'weight': 5.5,
+            'active': True,
+            'group': 'A',
+            'x': 10.0,
+            'y': 15.0
+        }
+        self.graph.add_node(1)
+        self.graph.set_node_attributes(1, **node_attributes)
+        for key, value in node_attributes.items():
+            self.assertEqual(self.graph._node[1][key], value)
+        
     def test_get_edge_attributes(self):
         self.graph.add_edge(1, 2, weight=4, color='red')
         attributes = self.graph.get_edge_attributes(1, 2)
@@ -384,6 +425,20 @@ class TestDiGraph(unittest.TestCase):
         self.assertIn(2, self.graph._pred[3])
         self.assertEqual(self.graph.number_of_nodes(), 3)
         self.assertEqual(self.graph.number_of_edges(), 2)
-            
+    
+    def test_str(self):
+        self.graph.add_node(1, color='blue')
+        self.graph.add_edge(1, 2, weight=4)
+        self.assertEqual(str(self.graph), "Directed Graph with 2 nodes and 1 edges.")
+        
+    def test_visualize_graph(self, png_path="../data/test.png"):
+        pdf_path="../data/test.png.pdf"
+        self.graph.add_edge("ATG", "TGC", weight=4)
+        self.graph.visualize_graph(png_path)
+        self.assertTrue(os.path.exists(png_path))
+        # clean files
+        os.remove(png_path)
+        os.remove(pdf_path)
+        
 if __name__ == '__main__':
     unittest.main()
