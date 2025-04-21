@@ -34,13 +34,8 @@ class TestDeBruijnGraph(unittest.TestCase):
     -`test_add_kmers_from_fasta`: Ensures that all k-mers from a fasta file are added.
     -`test_add_kmers_from_fasta_invalid_file`: Checks error from fasta file not found.
     -`test_add_degrees_attributes`: Ensures that all k-mers have the correct in_degree and out_degree attributes.
-    -`test_query_kmers_from_fasta`: Ensures that k-mers from a query are correcly parsed.
-    -`test_identify_query_connected_nodes`: Ensures that all nodes connected to query k-mers are correctly identified.
-    -`test_filter_graph_to_subgraph`: Ensures that the graph is properly filtered by a list of nodes.
     -`test_add_kmers_from_fasta_with_min_count`: Ensures that k-mers with lower than min_count are not added as graph edges.
     -`test_add_degrees_attributes_with_isolated_node`: Ensures that isolated nodes have 0 in_degree and 0 out_degree.
-    -`test_identify_query_subgraph`: Ensures that the function properly identifies query connected nodes and filters graph.
-    -`test_identify_query_subgraph_no_query_kmers`: Ensures that an error is raised if no query k-mers are in the graph.
     -`test_update_all_node_attributes`: Ensures that all nodes are updated to new attributes.
     -`test_identify_query_boundaries`: Ensure that the function identifies the correct query k-mers and the start and end of the query nodes.  
     -`test_identify_query_boundaries_missing_edge`: Ensures that user is notified if not all query edges are covered in the graph.
@@ -310,76 +305,6 @@ class TestDeBruijnGraph(unittest.TestCase):
         node4_attrs = dbg.get_node_attributes("CAT")
         self.assertEqual(node4_attrs['out_degree'], 0)
         self.assertEqual(node4_attrs['in_degree'], 1)
-        
-    def test_query_kmers_from_fasta(self):
-        k = 5
-        dbg = deBruijnGraph(k)
-
-        # Load small FASTA file for testing
-        test_fasta = os.path.abspath(os.path.join(os.path.dirname(__file__), '../data/test_query_kmers.fa'))
-
-        # Query k-mers from the FASTA file
-        query_kmers = list(dbg.query_kmers_from_fasta(test_fasta))
-
-        # Check that the correct k-1mers are returned
-        expected_kmers = ["ATGC", "TGCA", "GCAT", "CATG"]
-        for kmer in expected_kmers:
-            self.assertIn(kmer, query_kmers)
-
-        # Check reverse complement k-1mers
-        for kmer in expected_kmers:
-            rc_kmer = dbg.reverse_complement(kmer)
-            self.assertIn(rc_kmer, query_kmers)
-
-
-    def test_identify_query_connected_nodes(self):
-        k = 4
-        dbg = deBruijnGraph(k)
-
-        # Add k-mers to the graph
-        kmers = ["ATGC", "TGCA", "GCAT", "CATG"]
-        for kmer in kmers:
-            dbg.add_kmer(kmer)
-
-        # Query connected nodes
-        query_kmers = ["ATG"]
-        subgraph_dist = dbg.identify_query_connected_nodes(query_kmers)
-
-        # Check distances
-        self.assertEqual(subgraph_dist["ATG"], 0)
-        self.assertEqual(subgraph_dist["TGC"], 1)
-        self.assertEqual(subgraph_dist["GCA"], 2)
-        self.assertEqual(subgraph_dist["CAT"], 1)
-
-    def test_filter_graph_to_subgraph(self):
-        k = 4
-        dbg = deBruijnGraph(k)
-
-        # Add k-mers to the graph
-        kmers = ["ATGC", "TGCA", "GCAT", "CATG", "GATT"]
-        for kmer in kmers:
-            dbg.add_kmer(kmer)
-
-        # Identify query-connected nodes
-        query_kmers = {"ATG": 0}
-        subgraph_dist = dbg.identify_query_connected_nodes(query_kmers)
-
-        # Filter graph to subgraph
-        dbg.filter_graph_to_subgraph(subgraph_dist)
-
-        # Check that only query-connected nodes remain
-        remaining_nodes = list(dbg.get_nodes())
-        self.assertIn("ATG", remaining_nodes)
-        self.assertIn("TGC", remaining_nodes)
-        self.assertIn("GCA", remaining_nodes)
-        self.assertIn("CAT", remaining_nodes)
-        self.assertNotIn("GAT", remaining_nodes)
-        self.assertNotIn("ATT", remaining_nodes)
-        # Check that only query-connected edges remain
-        self.assertTrue(dbg.has_successor("ATG", "TGC"))
-        self.assertTrue(dbg.has_successor("TGC", "GCA"))
-        self.assertTrue(dbg.has_successor("GCA", "CAT"))  
-        self.assertTrue(dbg.has_successor("CAT", "ATG"))
 
     def test_add_kmers_from_fasta_with_min_count(self):
         k = 5
@@ -416,63 +341,6 @@ class TestDeBruijnGraph(unittest.TestCase):
         self.assertEqual(isolated_node_attrs['out_degree'], 0)
         self.assertEqual(isolated_node_attrs['in_degree'], 0)
 
-    def test_identify_query_subgraph(self):
-        k = 4
-        dbg = deBruijnGraph(k)
-
-        # Add k-mers to the graph
-        kmers = ["ATGC", "TGCA", "GCAT", "CATG", "GATT"]
-        for kmer in kmers:
-            dbg.add_kmer(kmer)
-
-        # Query k-mers
-        query_kmers = ["ATG"]
-
-        # Identify query subgraph
-        dbg.identify_query_subgraph(query_kmers)
-
-        # Check that only query-connected nodes remain
-        remaining_nodes = list(dbg.get_nodes())
-        self.assertIn("ATG", remaining_nodes)
-        self.assertIn("TGC", remaining_nodes)
-        self.assertIn("GCA", remaining_nodes)
-        self.assertIn("CAT", remaining_nodes)
-        self.assertNotIn("GAT", remaining_nodes)
-        self.assertNotIn("ATT", remaining_nodes)
-
-        # Check that only query-connected edges remain
-        self.assertTrue(dbg.has_successor("ATG", "TGC"))
-        self.assertTrue(dbg.has_successor("TGC", "GCA"))
-        self.assertTrue(dbg.has_successor("GCA", "CAT"))
-        self.assertTrue(dbg.has_successor("CAT", "ATG"))
-
-        # Check distances in the subgraph
-        node_attrs = dbg.get_node_attributes("ATG")
-        self.assertEqual(node_attrs['query_distance'], 0)
-        node_attrs = dbg.get_node_attributes("TGC")
-        self.assertEqual(node_attrs['query_distance'], 1)
-        node_attrs = dbg.get_node_attributes("GCA")
-        self.assertEqual(node_attrs['query_distance'], 2)
-        node_attrs = dbg.get_node_attributes("CAT")
-        self.assertEqual(node_attrs['query_distance'], 1)
-
-    def test_identify_query_subgraph_no_query_kmers(self):
-        k = 4
-        dbg = deBruijnGraph(k)
-
-        # Add k-mers to the graph
-        kmers = ["ATGC", "TGCA", "GCAT", "CATG"]
-        for kmer in kmers:
-            dbg.add_kmer(kmer)
-
-        # Query k-mers not in the graph
-        query_kmers = ["AAA"]
-
-        # Attempt to identify query subgraph
-        with self.assertRaises(ValueError) as context:
-            dbg.identify_query_subgraph(query_kmers)
-        self.assertEqual(str(context.exception), "No query k-mers found in the graph.")
-
     def test_update_all_node_attributes(self):
         k = 4
         dbg = deBruijnGraph(k)
@@ -501,6 +369,7 @@ class TestDeBruijnGraph(unittest.TestCase):
             dbg.add_kmer(kmer)
 
         # Create a small FASTA file for testing
+        # ATGCAGTT --> ATGC TGCA GCAG CAGT AGTT
         test_fasta = os.path.abspath(os.path.join(os.path.dirname(__file__), '../data/test_query_boundaries.fa'))
 
         # Identify query boundaries
@@ -528,6 +397,11 @@ class TestDeBruijnGraph(unittest.TestCase):
         # Check non visited nodes
         for node in ["CTGA", "TGAT"]:
             self.assertFalse(dbg.get_node_attributes(node)['visited'])
+        
+        # Check that correct nodes are in the query k-mers 
+        query_kmers = dbg.get_graph_attributes()['query_kmers']
+        expected_set = {"ATGC", "TGCA", "GCAG", "CAGT", "AGTT"}
+        self.assertEqual(query_kmers, expected_set)    
             
     def test_identify_query_boundaries_missing_edge(self):
         k = 5
@@ -549,6 +423,35 @@ class TestDeBruijnGraph(unittest.TestCase):
             str(context.exception),
             "Edge CAGT->AGTT does not exist in the graph. Query sequence may not be fully represented."
             )
+    def test_find_connected_nodes(self):
+        k = 5
+        dbg = deBruijnGraph(k)
+        # Add k-mers to the graph
+        kmers = ["ATGAA", "AGGGC"]
+        for kmer in kmers:
+            dbg.add_kmer(kmer)
+        
+        # Find connected nodes
+        connected_nodes = dbg.find_connected_nodes("ATGA", dir=1)
+        self.assertIn("ATGA", connected_nodes)
+        self.assertIn("TGAA", connected_nodes)
+        self.assertFalse("AGGG" in connected_nodes)
+    
+    def test_filter_graph(self):
+        k = 5
+        dbg = deBruijnGraph(k)
+        # Add k-mers to the graph
+        kmers = ["AATGA", "ATGAA", "TGAAC", "TGAAG", "AGGGC"]
+        for kmer in kmers:
+            dbg.add_kmer(kmer)
+        # add query k-mers
+        dbg.set_graph_attributes(query_kmers={"ATGA", "TGAA"}, 
+                                 query_start="ATGA", query_end="TGAA")
+        # Filter graph
+        expected_nodes = {"AATG", "ATGA", "TGAA", "GAAC", "GAAG"}
+        dbg.filter_graph()
+        remaining_nodes = set(dbg.get_nodes())
+        self.assertEqual(remaining_nodes, expected_nodes)
     
     def test_get_next_node_successor(self):
         k = 4
