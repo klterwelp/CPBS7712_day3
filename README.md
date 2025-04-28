@@ -53,7 +53,7 @@ python src/assemble_align.py \
 --min_count 1
 ```
 
-This will run the assembly and alignment pipeline. The reads in `read_path` will be used to construct a de Bruijn Graph, while the query sequence in `query_path` will be used to construct the final assembly. The reads will be aligned against the longest constructed contig and the output of the assembly and alignments will be written to the specified output paths.
+This will run the assembly and alignment pipeline. The reads in `read_path` will be used to construct a de Bruijn Graph, while the query sequence in `query_path` will be used to identify the final assembly. The reads will be aligned against the longest constructed contig and the output of the assembly and alignments will be written to the specified output paths.
 
 ### Parameters
 
