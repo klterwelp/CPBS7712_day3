@@ -4,7 +4,7 @@ This repository holds the code for the CPBS7712 programming assignment. The goal
 
 ## Description
 
-The code implements a de Bruijn graph-based assembly algorithm that identifies the longest contig containing a given query sequence and aligns reads to the contig. The algorithm constructs a directed graph from the input reads, identifies the k-mers associated with the query sequence, and assembles the longest contig that includes the query sequence. Then the reads are aligned to the contig using a simple seed-and-extend approach.
+The algorithm constructs a directed graph from the input reads, identifies the k-mers associated with the query sequence, and assembles the longest contig that includes the query sequence. Then the reads are aligned to the contig using a simple seed-and-extend approach.
 
 ## Installation Instructions
 
