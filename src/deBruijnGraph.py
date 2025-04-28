@@ -2,6 +2,7 @@
 from directedGraph import diGraph
 from collections import defaultdict
 from collections import deque
+from collections import Counter
 
 # class deBruijnGraph inherits from diGraph
 class deBruijnGraph(diGraph):
@@ -189,7 +190,52 @@ class deBruijnGraph(diGraph):
             self.add_nodes_with_edge(rc_left_mer, rc_right_mer, coverage)
         except ValueError as e:
             print(e)
+# Check that sequence only contains 'A', 'T', 'C', 'G'
+    def check_sequence_validity(self, sequence):
+        """
+        Checks if a given sequence contains only valid DNA bases (A, T, C, G).
+        Args:
+            sequence (str): The DNA sequence to be checked.
+            Raises:
+                ValueError: If the sequence contains invalid bases.
+        """
+        # assert that sequence only contains 'A', 'T', 'C', 'G'
+        valid_bases = {'A', 'T', 'C', 'G'}
+        if not set(sequence).issubset(valid_bases):
+            raise ValueError(f"Invalid base in sequence: {sequence}")
         
+# Count k-mers from a sequence
+    def count_kmers_from_sequence(self, sequence, k):
+        """
+        Counts the occurrences of k-mers in a given sequence.
+        """
+        return Counter(sequence[i:i+k] for i in range(len(sequence) - k + 1))
+    
+# count k-mers from a fasta file 
+    def count_kmers_from_fasta(self, fasta_path):
+        """
+        Reads a FASTA file and counts the occurrences of k-mers in the sequences.
+
+        Args:
+            fasta_path (str): The file path to the FASTA file containing sequences.
+
+        Returns:
+            dict: A dictionary where keys are k-mers and values are their counts.
+        """
+        k = self.graph['k']
+        kmer_counts = Counter()
+
+        with open(fasta_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                if line.startswith('>'):    # skip headers
+                    continue
+                else:
+                    sequence = line.strip()
+                    # assert that sequence only contains 'A', 'T', 'C', 'G'
+                    self.check_sequence_validity(sequence)
+                    kmer_counts.update(sequence[i:i+k] for i in range(len(sequence) - k + 1))
+        return dict(kmer_counts)
+            
 # add k-mers from fasta file to de bruijn graph
     def add_kmers_from_fasta(self, fasta_path, min_count=1):
         """
@@ -206,23 +252,8 @@ class deBruijnGraph(diGraph):
         erronous k-mers from being added to the graph. Then, adds the count as coverage
         for the k-mer edge. 
         """
-
-        k = self.graph['k']
-        kmer_counts = defaultdict(int)
-
         # First pass: Count k-mer occurrences
-        with open(fasta_path, 'r', encoding='utf-8') as file:
-            for line in file:
-                if line.startswith('>'):  # skip headers
-                    continue
-                else:
-                    sequence = line.strip()
-                    # assert that sequence only contains 'A', 'T', 'C', 'G'
-                    valid_bases = {'A', 'T', 'C', 'G'}
-                    assert set(sequence) <= valid_bases, f"Invalid base in sequence: {sequence}"
-                    for i in range(len(sequence) - k + 1):
-                        kmer = sequence[i:i+k]
-                        kmer_counts[kmer] += 1
+        kmer_counts = self.count_kmers_from_fasta(fasta_path)
 
         # Second pass: Add k-mers that meet the min_count threshold
         for kmer, count in kmer_counts.items():
@@ -290,9 +321,7 @@ class deBruijnGraph(diGraph):
         # add query_sequence to graph attributes
         self.set_graph_attributes(query = query_sequence) 
         # assert that sequence only contains 'A', 'T', 'C', 'G'
-        valid_bases = {'A', 'T', 'C', 'G'}
-        query_sequence = query_sequence.upper()
-        assert set(query_sequence) <= valid_bases, f"Invalid base in sequence: {query_sequence}"
+        self.check_sequence_validity(query_sequence)
         
         # start empty query_kmer graph attribute
         query_kmers = set()
@@ -934,3 +963,19 @@ class deBruijnGraph(diGraph):
         
         return assembled_sequence
 
+    def write_assembly_to_fasta(self, output_path, sequence, sequence_name="contig1"):
+        """
+        Writes the assembled sequence to a FASTA file. 
+        Args: 
+            - output_path (str): The path to the output FASTA file. 
+            - sequence (str): The assembled sequence to write to the file. 
+            - sequence_name (str): The name of the sequence to write to the file. 
+        """
+        
+        # open the output file in write mode
+        with open(output_path, "w") as file: 
+            # write the FASTA header
+            file.write(f">{sequence_name}\n")
+            # write the sequence
+            file.write(f"{sequence}\n")
+        
