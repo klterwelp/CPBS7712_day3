@@ -2,6 +2,7 @@
 from directedGraph import diGraph
 from collections import defaultdict
 from collections import deque
+from collections import Counter
 
 # class deBruijnGraph inherits from diGraph
 class deBruijnGraph(diGraph):
@@ -189,7 +190,52 @@ class deBruijnGraph(diGraph):
             self.add_nodes_with_edge(rc_left_mer, rc_right_mer, coverage)
         except ValueError as e:
             print(e)
+# Check that sequence only contains 'A', 'T', 'C', 'G'
+    def check_sequence_validity(self, sequence):
+        """
+        Checks if a given sequence contains only valid DNA bases (A, T, C, G).
+        Args:
+            sequence (str): The DNA sequence to be checked.
+            Raises:
+                ValueError: If the sequence contains invalid bases.
+        """
+        # assert that sequence only contains 'A', 'T', 'C', 'G'
+        valid_bases = {'A', 'T', 'C', 'G'}
+        if not set(sequence).issubset(valid_bases):
+            raise ValueError(f"Invalid base in sequence: {sequence}")
         
+# Count k-mers from a sequence
+    def count_kmers_from_sequence(self, sequence, k):
+        """
+        Counts the occurrences of k-mers in a given sequence.
+        """
+        return Counter(sequence[i:i+k] for i in range(len(sequence) - k + 1))
+    
+# count k-mers from a fasta file 
+    def count_kmers_from_fasta(self, fasta_path):
+        """
+        Reads a FASTA file and counts the occurrences of k-mers in the sequences.
+
+        Args:
+            fasta_path (str): The file path to the FASTA file containing sequences.
+
+        Returns:
+            dict: A dictionary where keys are k-mers and values are their counts.
+        """
+        k = self.graph['k']
+        kmer_counts = Counter()
+
+        with open(fasta_path, 'r', encoding='utf-8') as file:
+            for line in file:
+                if line.startswith('>'):    # skip headers
+                    continue
+                else:
+                    sequence = line.strip()
+                    # assert that sequence only contains 'A', 'T', 'C', 'G'
+                    self.check_sequence_validity(sequence)
+                    kmer_counts.update(sequence[i:i+k] for i in range(len(sequence) - k + 1))
+        return dict(kmer_counts)
+            
 # add k-mers from fasta file to de bruijn graph
     def add_kmers_from_fasta(self, fasta_path, min_count=1):
         """
@@ -206,344 +252,13 @@ class deBruijnGraph(diGraph):
         erronous k-mers from being added to the graph. Then, adds the count as coverage
         for the k-mer edge. 
         """
-
-        k = self.graph['k']
-        kmer_counts = defaultdict(int)
-
         # First pass: Count k-mer occurrences
-        with open(fasta_path, 'r', encoding='utf-8') as file:
-            for line in file:
-                if line.startswith('>'):  # skip headers
-                    continue
-                else:
-                    sequence = line.strip()
-                    # assert that sequence only contains 'A', 'T', 'C', 'G'
-                    valid_bases = {'A', 'T', 'C', 'G'}
-                    assert set(sequence) <= valid_bases, f"Invalid base in sequence: {sequence}"
-                    for i in range(len(sequence) - k + 1):
-                        kmer = sequence[i:i+k]
-                        kmer_counts[kmer] += 1
+        kmer_counts = self.count_kmers_from_fasta(fasta_path)
 
         # Second pass: Add k-mers that meet the min_count threshold
         for kmer, count in kmer_counts.items():
             if count >= min_count:
                 self.add_kmer(kmer, coverage=count)
-
-# import query fasta file as search queue 
-    def query_kmers_from_fasta(self, fasta_path):
-        """
-        Reads a FASTA file and returns an iterator of k-mers from the sequences.
-
-        Args:
-            fasta_path (str): The file path to the FASTA file containing sequences.
-
-        The method skips lines starting with '>' (FASTA headers) and processes the 
-        remaining lines as sequences. It yields left and right k-1mers from the 
-        forward and reverse complement of the sequence as it reads them. 
-        """
-        k = self.graph['k']
-
-        with open(fasta_path, 'r') as file:
-            for line in file:
-                if line.startswith('>'):
-                    continue
-                else:
-                    sequence = line.strip()
-                    # assert that sequence only contains 'A', 'T', 'C', 'G'
-                    valid_bases = {'A', 'T', 'C', 'G'}
-                    assert set(sequence) <= valid_bases, f"Invalid base in sequence: {sequence}"
-                    for i in range(len(sequence) - k + 1):
-                        kmer = sequence[i:i+k]
-                        left_mer = kmer[:-1]
-                        right_mer = kmer[1:]
-                        yield left_mer
-                        yield right_mer
-                        # add reverse complement k-mers 
-                        rc_kmer = self.reverse_complement(kmer)
-                        rc_left_mer = rc_kmer[:-1]
-                        rc_right_mer = rc_kmer[1:]
-                        yield rc_left_mer
-                        yield rc_right_mer
-                        
-# identify query subgraph 
-## filters de bruijn graph to only include k-mers connected to query k-mers
-    def identify_query_connected_nodes(self, query_kmers):
-        """
-       Identifies k-mers in the De Bruijn Graph connected to query k-mers using a breadth-first search algorithm.
-
-        This method determines all k-mers in the graph that are connected to the input query k-mers. It updates 
-        the graph with attributes indicating whether a node is part of the query subgraph and its distance 
-        from the query k-mers.
-
-        Args:
-            query_kmers (iterable): An iterable of k-mers to be used as the starting points for the search.
-
-        Behavior:
-            - Initializes the query k-mers with a distance of 0 and marks them as part of the query subgraph.
-            - Performs a breadth-first search (BFS) to traverse the graph, starting from the query k-mers.
-            - Updates the graph nodes with attributes:
-            - `visited`: Indicates whether the node has been visited during BFS.
-            - `query_subgraph`: Indicates whether the node is part of the query subgraph.
-            - `query_distance`: The shortest distance from the node to any query k-mer.
-            - Tracks distances of connected k-mers in a subgraph distance dictionary.
-
-        Returns:
-            dict: A dictionary where keys are k-mers and values are their shortest distances from the query k-mers.
-        """
-        # initialize subgraph nodes and distance dictionary 
-        subgraph_dist = {}
-        
-        # check that query k-mers are in the graph
-        for kmer in query_kmers:
-            if self.has_node(kmer):
-                # get node attributes from graph
-                node_attr = self.get_node_attributes(kmer)
-                # set query distance to 0 for query k-mers
-                node_attr['query_distance'] = 0
-                # update query attributes in graph
-                self.set_node_attributes(kmer, **node_attr)
-                # add kmer to subgraph_dist 
-                subgraph_dist[kmer] = 0
-            else:
-                print(f"Query k-mer: {kmer} not found in graph.")
-                # remove kmer from query_kmers
-                query_kmers.remove(kmer)
-        
-        # if subgraph_dist is empty, raise an error message
-        if not subgraph_dist:
-            raise ValueError("No query k-mers found in the graph.")
-              
-        # initialize queue with query k-mers
-        # breadth-first search algorithm
-        queue = deque(query_kmers)
-        # iterate over queue
-        while queue:
-            # pop the first k-mer (FIFO: first in, first out)
-            kmer = queue.popleft()
-            # get k-mer attributes 
-            node_attr = self.get_node_attributes(kmer)
-            # if k-mer is not visited, continue
-            if node_attr['visited']:
-                continue
-            # set visited to True and query subgraph to True
-            node_attr['visited'] = True
-            node_attr['query_subgraph'] = True        
-            # get distance and add to subgraph distance dictionary
-            dist = node_attr['query_distance']
-            subgraph_dist[kmer] = dist
-            # update node attributes in graph
-            self.set_node_attributes(kmer, **node_attr)
-            # identify adjacent k-mers 
-            successors = self.successors(kmer)
-            predecessors = self.predecessors(kmer)
-            
-            # iterate over successors 
-            for successor in successors:
-                # add successor to queue
-                if not self.get_node_attributes(successor)['visited'] and successor not in queue:
-                    queue.append(successor)
-                # set distance for successor
-                if successor not in subgraph_dist:
-                    subgraph_dist[successor] = dist + 1
-                else : # if already in subgraph_dist, update distance to minimum dist
-                    subgraph_dist[successor] = min(subgraph_dist[successor], dist + 1)
-                # add successor dist to graph 
-                node_attr = self.get_node_attributes(successor)
-                node_attr['query_distance'] = subgraph_dist[successor]
-                self.set_node_attributes(successor, **node_attr)
-                
-            # iterate over predecessors
-            for predecessor in predecessors:
-                # add predecessor to queue if not already visited 
-                if not self.get_node_attributes(predecessor)['visited'] and predecessor not in queue:
-                    queue.append(predecessor)
-                # set distance for predecessor
-                if predecessor not in subgraph_dist:
-                    subgraph_dist[predecessor] = dist + 1
-                else :  #if already in subgraph_dist, update distance to minimum dist
-                    subgraph_dist[predecessor] = min(subgraph_dist[predecessor], dist + 1)
-                # add predecessor dist to graph 
-                node_attr = self.get_node_attributes(predecessor)
-                node_attr['query_distance'] = subgraph_dist[predecessor]
-                self.set_node_attributes(predecessor, **node_attr)
-        
-        return(subgraph_dist)
-        
-# filter graph based on dictionary of nodes 
-    def filter_graph_to_subgraph(self, query_kmers):
-                """
-                Filters the current graph to include only nodes and edges that are part of the query subgraph.
-
-                This method takes a dictionary of query-related k-mers and constructs a subgraph containing only 
-                the nodes and edges that are relevant to the query. The subgraph is created efficiently by 
-                leveraging a set for membership checks and copying relevant nodes and edges in a single pass.
-
-                Args:
-                    query_kmers (dict): A dictionary where keys are k-mers that define the query subgraph, 
-                            and values are distances (ignored in this function). Generated with 
-                            identify_query_connected_nodes.
-
-                Behavior:
-                    - Nodes in the graph that are not part of the query_kmers are excluded.
-                    - Edges between nodes are preserved only if both nodes are part of the query_kmers.
-                    - The current graph is replaced with the filtered subgraph.
-
-                Notes:
-                    - This method assumes that the graph is represented using internal attributes such as 
-                      `_node`, `_pred`, and `_succ` for nodes, predecessors, and successors respectively.
-                    - The method also updates the graph's metadata, including node and edge counts.
-
-                Raises:
-                    KeyError: If any k-mer in query_kmers is not found in the graph.
-
-                """
-                # Create a new graph to store the subgraph
-                subgraph = diGraph(k=self.graph['k'], compacted=self.graph['compacted'])
-
-                # Use set for faster membership checks
-                query_kmers_set = set(query_kmers.keys())
-
-                # Copy nodes and edges to subgraph in a single pass
-                for kmer in query_kmers_set:
-                    if kmer in self._node:
-                        subgraph.add_node(kmer, **self.get_node_attributes(kmer))
-                    # Add edges to predecessors
-                    for pred in self._pred.get(kmer, {}):
-                        if pred in query_kmers_set:
-                            subgraph.add_edge(pred, kmer, **self.get_edge_attributes(pred, kmer))
-                    # Add edges to successors
-                    for succ in self._succ.get(kmer, {}):
-                        if succ in query_kmers_set:
-                            subgraph.add_edge(kmer, succ, **self.get_edge_attributes(kmer, succ))
-
-                # Replace the current graph with the filtered subgraph
-                self.graph = subgraph.graph
-                self._node = subgraph._node
-                self._succ = subgraph._succ
-                self._pred = subgraph._pred
-                self.node_count = subgraph.node_count
-                self.edge_count = subgraph.edge_count
-
-# identify query connected nodes and generate subgraph 
-## combines the above two methods for quicker subgraph generation
-    def identify_query_subgraph(self, query_kmers):
-        """
-        Identifies and extracts a subgraph from the current graph based on the provided query k-mers.
-        This method performs a breadth-first search (BFS) starting from the query k-mers, 
-        traversing both successors and predecessors, and constructs a subgraph containing 
-        all reachable nodes and edges. The subgraph is then used to replace the current graph.
-        Args:
-            query_kmers (list): A list of k-mers to use as the starting points for identifying the subgraph.
-        Raises:
-            ValueError: If none of the query k-mers are found in the graph.
-        Behavior:
-            - Initializes the subgraph and a distance dictionary for tracking distances from query k-mers.
-            - Checks if each query k-mer exists in the graph. If not, it is removed from the query list.
-            - Performs a BFS to traverse the graph, marking nodes as visited and adding them to the subgraph.
-            - Updates node attributes such as `query_distance`, `visited`, and `query_subgraph`.
-            - Adds edges between nodes in the subgraph.
-            - Replaces the current graph with the newly constructed subgraph.
-        Notes:
-            - The method assumes that the graph has methods for accessing and modifying node and edge attributes.
-            - The graph is expected to have attributes such as `visited` and `query_distance` for nodes.
-        Returns:
-            None
-        """
-        
-        # initialize subgraph nodes and distance dictionary 
-        subgraph_dist = {}
-        # Create a new graph to store the subgraph
-        subgraph = diGraph(k=self.graph['k'], compacted=self.graph['compacted'])
-        
-        # Check that query k-mers are in the graph
-        for kmer in query_kmers:
-            if self.has_node(kmer):
-                # get node attributes from graph
-                node_attr = self.get_node_attributes(kmer)
-                # set query distance to 0 for query k-mers
-                node_attr['query_distance'] = 0
-                # update query attributes in graph
-                self.set_node_attributes(kmer, **node_attr)
-                # add kmer to subgraph_dist 
-                subgraph_dist[kmer] = 0
-            else:
-                print(f"Query k-mer: {kmer} not found in graph.")
-                # remove kmer from query_kmers
-                query_kmers.remove(kmer)
-        
-        # if subgraph_dist is empty, raise an error message
-        if not subgraph_dist:
-            raise ValueError("No query k-mers found in the graph.")
-        
-        # initialize queue with query k-mers
-        # breadth-first search algorithm
-        queue = deque(query_kmers)
-        # iterate over queue
-        while queue:
-            # pop
-            kmer = queue.popleft()
-            # get k-mer attributes
-            node_attr = self.get_node_attributes(kmer)
-            # if k-mer is not visited, continue
-            if node_attr['visited']:
-                continue
-            # set visited to True and query subgraph to True
-            node_attr['visited'] = True
-            node_attr['query_subgraph'] = True
-            # get distance and add to subgraph distance dictionary
-            dist = node_attr['query_distance']
-            subgraph_dist[kmer] = dist
-            # update node attributes in graph
-            self.set_node_attributes(kmer, **node_attr)
-            # add node to subgraph
-            subgraph.add_node(kmer, **node_attr)
-            # identify adjacent k-mers
-            successors = self.successors(kmer)
-            predecessors = self.predecessors(kmer)
-            # iterate over successors
-            for successor in successors:
-                # add successor to queue
-                if not self.get_node_attributes(successor)['visited'] and successor not in queue:
-                    queue.append(successor)
-                # set distance for successor
-                if successor not in subgraph_dist:
-                    subgraph_dist[successor] = dist + 1
-                else:
-                    subgraph_dist[successor] = min(subgraph_dist[successor], dist + 1)
-                # add successor dist to graph
-                node_attr = self.get_node_attributes(successor)
-                node_attr['query_distance'] = subgraph_dist[successor]
-                self.set_node_attributes(successor, **node_attr)
-                # add node to subgraph
-                subgraph.add_node(successor, **node_attr)
-                # add edge to subgraph
-                subgraph.add_edge(kmer, successor, **self.get_edge_attributes(kmer, successor))
-            # iterate over predecessors
-            for predecessor in predecessors:
-                # add predecessor to queue if not already visited
-                if not self.get_node_attributes(predecessor)['visited'] and predecessor not in queue:
-                    queue.append(predecessor)
-                # set distance for predecessor
-                if predecessor not in subgraph_dist:
-                    subgraph_dist[predecessor] = dist + 1
-                else:
-                    subgraph_dist[predecessor] = min(subgraph_dist[predecessor], dist + 1)
-                # add predecessor dist to graph
-                node_attr = self.get_node_attributes(predecessor)
-                node_attr['query_distance'] = subgraph_dist[predecessor]
-                self.set_node_attributes(predecessor, **node_attr)
-                # add node to subgraph
-                subgraph.add_node(predecessor, **node_attr)
-                # add edge to subgraph
-                subgraph.add_edge(predecessor, kmer, **self.get_edge_attributes(predecessor, kmer))
-            
-        # replace the current graph with the filtered subgraph
-        self.graph = subgraph.graph
-        self._node = subgraph._node
-        self._succ = subgraph._succ
-        self._pred = subgraph._pred
-        self.node_count = subgraph.node_count
-        self.edge_count = subgraph.edge_count
         
     def add_degrees_attributes(self):
         """
@@ -606,16 +321,19 @@ class deBruijnGraph(diGraph):
         # add query_sequence to graph attributes
         self.set_graph_attributes(query = query_sequence) 
         # assert that sequence only contains 'A', 'T', 'C', 'G'
-        valid_bases = {'A', 'T', 'C', 'G'}
-        query_sequence = query_sequence.upper()
-        assert set(query_sequence) <= valid_bases, f"Invalid base in sequence: {query_sequence}"
+        self.check_sequence_validity(query_sequence)
         
+        # start empty query_kmer graph attribute
+        query_kmers = set()
         for i in range(len(query_sequence) - k + 1):
             kmer = query_sequence[i:i+k]
             left_mer = kmer[:-1]
             right_mer = kmer[1:]
             # check if left_mer-> right_mer edge exists
             if self.has_successor(left_mer, right_mer):
+                # add left_mer and right_mer to query_kmers
+                query_kmers.add(left_mer)
+                query_kmers.add(right_mer)
                 # get edge attributes
                 edge_attr = self.get_edge_attributes(left_mer,right_mer)
                 # update edge attributes 
@@ -649,8 +367,151 @@ class deBruijnGraph(diGraph):
                     f"Edge {left_mer}->{right_mer} does not exist in the graph. "
                     "Query sequence may not be fully represented."
                 )
+        # set query_kmers as graph attribute
+        self.set_graph_attributes(query_kmers = query_kmers)
+    
+    # identify nodes connected to a node using bfs and direction 
+    def find_connected_nodes(self, node, visited_nodes=None, connected_nodes=None, dir=0):
+        """
+        Finds all nodes connected to a given node in a directed graph.
+        This method performs a breadth-first search (BFS) to identify all nodes
+        connected to the input node, either in the direction of predecessors or
+        successors, depending on the specified direction. If `visited_nodes` or
+        `connected_nodes` is `None`, they are initialized as empty sets.
+        Args:
+            node (hashable): The starting node for the search.
+            visited_nodes (set, optional): A set of nodes that have already been visited.
+                If None, an empty set will be initialized. Defaults to None.
+            connected_nodes (set, optional): A set of nodes that are connected to the
+                starting node. If None, an empty set will be initialized. Defaults to None.
+            dir (int, optional): The direction of the search. Use 0 for predecessors
+                and 1 for successors. Defaults to 0.
+        Returns:
+            connected_nodes (set): A set of all nodes connected to the input node.
+        Raises:
+            ValueError: If the input node is not found in the graph.
+            ValueError: If the direction is not 0 or 1.
+        """
+        # check if node is in graph
+        if not self.has_node(node):
+            return set()  # Return an empty set if the node is not found
+        # check that direction is a valid option 
+        if dir != 0 and dir != 1:
+            raise ValueError("Invalid direction: must be 0 (predecessors) or 1 (successors).")
+        # determine neighbor function
+        neighbor_func = self.predecessors if dir == 0 else self.successors
+        # start empty visited nodes set if not set
+        if visited_nodes is None:
+            visited_nodes = set()
+        # start empty connected nodes set if not set
+        if connected_nodes is None:
+          connected_nodes = set()
+        # initiate queue with input node
+        queue = deque([node])
+        
+        # iterate over queue while queue is not empty 
+        while queue:
+            # pop the first node 
+            current_node = queue.popleft()
+            # check if current node is already visited
+            if current_node in visited_nodes:
+                continue    # skips if already visited
+            else: 
+                # set current node to visited 
+                visited_nodes.add(current_node)
+            
+            if current_node in connected_nodes:
+                continue    # skips if already in connected nodes
+            else: 
+                # add current node to connected nodes
+                connected_nodes.add(current_node)
+            
+            # identify node neighbors
+            neighbors = list(neighbor_func(current_node))
+            # check if neighbors is empty
+            if not neighbors:
+                continue
+            # iterate over neighbors
+            for neighbor in neighbors:
+                # check if neighbor is already in connected nodes, visited, or in in queue
+                if neighbor not in connected_nodes:
+                    if neighbor not in visited_nodes:
+                        if neighbor not in queue:
+                            queue.append(neighbor)
+                else: 
+                    continue
+        
+        return connected_nodes
+
+    # filter out all nodes that are not connected to query k-mers
+    def filter_graph(self): 
+        
+        # identify query start, end, and k-mers
+        query_start = self.graph.get("query_start")
+        query_end = self.graph.get("query_end")
+        query_kmers = self.graph.get("query_kmers")
+        
+        # check if query start and end are defined
+        if not query_start or not query_end:
+            raise ValueError("Query start and end not defined. Please run identify_query_boundaries.")
+        # check if query k-mers are defined
+        if not query_kmers:
+            raise ValueError("Query k-mers not defined. Please run identify_query_boundaries.")
+        # check if query start and end are in the graph
+        if not self.has_node(query_start) or not self.has_node(query_end):
+            raise ValueError("Query start and end not found in graph. Please run identify_query_boundaries.")
+        # check if graph is already compacted
+        if self.graph["compacted"]:
+            raise ValueError("Graph is already compacted. Only compact once.")
+        
+        # identify all nodes connected to query start from the predecessor direction
+        connected_start = self.find_connected_nodes(query_start, dir = 0)
+        connected_end = self.find_connected_nodes(query_end, dir = 1)
+        # combine connected start and end nodes into connected kmers, avoiding duplicates
+        connected_kmers = connected_start.union(connected_end)
+        # Check that connected start and end are not empty
+        if not connected_kmers:
+            raise ValueError("No nodes connected to query start or end.")
+        # Add all query k-mers to connected_kmers, avoiding duplicates
+        connected_kmers.union(query_kmers)
+        
+        # Remove all nodes that are not in the connected_kmers set
+        for node in list(self.get_nodes()):
+            if node not in connected_kmers:
+                self.remove_node(node)
+        
     # compact graph except for query kmers 
     def compact_except_query(self):
+        """
+        Compacts all non-query k-mers in the graph while preserving query k-mers.
+
+        This method performs a graph compaction process that merges linear paths of k-mers, 
+        reducing the number of nodes while maintaining essential connectivity. The method 
+        ensures that query k-mers remain unmodified. The process follows these steps:
+
+        1. **Pre-checks**:
+            - Ensures the graph is not already compacted.
+            - Adds in-degree and out-degree attributes if missing.
+            - Validates that query boundaries are defined.
+
+        2. **Compaction Process**:
+            - Iteratively identifies compactable nodes (non-query, out-degree = 1).
+            - Finds the left-most compactable node in a linear path.
+            - Merges consecutive nodes by appending their sequences while preserving essential 
+          properties such as distance and coverage.
+            - Removes redundant nodes and updates edges accordingly.
+    
+        3. **Final Updates**:
+            - Resets `visited` attributes for all non-query nodes.
+            - Updates coverage information for compacted nodes based on `sum/dist`.
+
+        Raises:
+            ValueError: If the graph is already compacted or query boundaries are not defined.
+
+        Notes:
+            - The function prints intermediate steps for debugging.
+            - Query k-mers remain unmodified throughout the process.
+        """
         # check if graph is already compacted, raise errors if it is 
         if self.graph["compacted"]:
             raise ValueError("Graph is already compacted. Only compact once.")
@@ -672,9 +533,7 @@ class deBruijnGraph(diGraph):
         while True:
             # update set of compactable nodes
                 # do not compact: query_kmers or already compacted nodes
-            compactable_nodes = list(self.get_nodes(compacted=False, out_degree=1, query_kmer=False))
-            print(f"Compactable nodes for {i} are {compactable_nodes}")
-            
+            compactable_nodes = list(self.get_nodes(compacted=False, out_degree=1, query_kmer=False))            
             # if set of compactable nodes is empty, break
             if not compactable_nodes:
                 break
@@ -718,12 +577,11 @@ class deBruijnGraph(diGraph):
                 else:
                     # no predecessor
                     pred = 0
-                    pred_out_degree == 0
+                    pred_out_degree = 0
                     pred_visited = False
                     pred_query = False 
         
             # start compacting from left-most node
-            print(f"starting to compact with {node}")
             node_attr = self.get_node_attributes(node)
             node_out_degree = (self.out_degree(node) == 1)
             node_compacted = node_attr['compacted']
@@ -746,35 +604,35 @@ class deBruijnGraph(diGraph):
                     # test the following break conditions:
                 successors = list(self.successors(node))
                 if not successors:
-                    print(f"No successors found for node: {node}")
+                    #print(f"No successors found for node: {node}")
                     break
                 
                 # 1) node must have one out_degree
                 if (self.out_degree(node) != 1):
                     # more than one successor, no more compaction!
-                    print(f"finished compaction with node {node}")
+                    #print(f"finished compaction with node {node}")
                     break
                 # 2) successor must have one in_degree
                 succ = successors[0]
                 succ_attr = self.get_node_attributes(succ)
                 if (self.in_degree(succ) != 1):
-                    print(f"finished compaction with node {node}")
+                    #print(f"finished compaction with node {node}")
                     break
                 # 3) successor cannot be the node (self-reference loop)
                 if succ == node:
-                    print(f"hit a self-reference with node {node}")
+                    #print(f"hit a self-reference with node {node}")
                     break
                 # 4) successor cannot already be visited
                 if succ_attr['visited']:
-                    print(f"hit a loop: {succ} already visited")
+                    #print(f"hit a loop: {succ} already visited")
                     break
                 # 5) successor cannot be query node
                 if succ_attr['query_kmer']:
-                    print(f"hit a query kmer: {succ}")
+                    #print(f"hit a query kmer: {succ}")
                     break
                 # 6) node cannot be a successor or successor's successor
                 if node in self.successors(node) or node in self.successors(succ):
-                    print(f"hit a loop: {node} is a successor or a successor's successor")
+                    #print(f"hit a loop: {node} is a successor or a successor's successor")
                     break 
                 # set node to visited 
                 self.set_node_attributes(node, visited=True)
@@ -833,9 +691,7 @@ class deBruijnGraph(diGraph):
                 new_out_degree = self.out_degree(node)
                 new_in_degree = self.in_degree(node)
                 self.set_node_attributes(node, out_degree=new_out_degree, in_degree=new_in_degree)
-                
-                print(f"{node}: out_degrees equal to {self.out_degree(node)} and set to {new_out_degree}")
-        
+                        
         # Update coverage of nodes based on sum/dist 
         # Update all nodes except query as not visited for assembly purposes
         reset_list=list(self.get_nodes(query_kmer=False, visited=True))
@@ -1107,3 +963,19 @@ class deBruijnGraph(diGraph):
         
         return assembled_sequence
 
+    def write_assembly_to_fasta(self, output_path, sequence, sequence_name="contig1"):
+        """
+        Writes the assembled sequence to a FASTA file. 
+        Args: 
+            - output_path (str): The path to the output FASTA file. 
+            - sequence (str): The assembled sequence to write to the file. 
+            - sequence_name (str): The name of the sequence to write to the file. 
+        """
+        
+        # open the output file in write mode
+        with open(output_path, "w") as file: 
+            # write the FASTA header
+            file.write(f">{sequence_name}\n")
+            # write the sequence
+            file.write(f"{sequence}\n")
+        
