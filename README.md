@@ -68,8 +68,8 @@ This will run the assembly and alignment pipeline. The reads in `read_path` will
 
 ### Outputs
 
-- Assembly: longest contig in FASTA format, written to a file in given path: `--output_assembly_path`
-- Alignment: TSV file in the following format, written to a file in given path: `--output_alignment_path`
+- Assembly: longest contig in FASTA format, written to a file in given path `--output_assembly_path`
+- Alignment: TSV file in the following format, written to a file in given path `--output_alignment_path`
  
 | sseqid  | qseqid   | sstart     | send     | qstart      | qend      | length        | strand     |
 |---------|----------|------------|----------|-------------|-----------|---------------|------------|
