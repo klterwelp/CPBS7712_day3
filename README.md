@@ -65,3 +65,13 @@ This will run the assembly and alignment pipeline. The reads in `read_path` will
 - `--k_alignment`: Length of the k-mers used for alignment. Default is 20.
 - `--interval`: Interval used to generate the seed k-mers for alignment. Default is to calculate based on the read length.
 - `--min_count`: Minimum number of times a given k-mer must appear in the reads to be considered for assembly. Default is 1.
+
+### Outputs
+
+- Assembly: longest contig in FASTA format, written to a file in given path: `--output_assembly_path`
+- Alignment: TSV file in the following format, written to a file in given path: `--output_alignment_path`
+ 
+| sseqid  | qseqid   | sstart     | send     | qstart      | qend      | length        | strand     |
+|---------|----------|------------|----------|-------------|-----------|---------------|------------|
+| read ID | query ID | read start | read end | query start | query end | alignment len | strand +/- |
+
